@@ -2,16 +2,14 @@
 -- Run AFTER 02_deploy_procedures.sql
 --
 -- ============================================================
--- CONFIGURE: Set your frequency here (one setting controls everything)
+-- CONFIGURE: Set your parameters here
 -- ============================================================
-SET LOOKBACK_DAYS = 7;  -- How often to run: 1=daily, 7=weekly, 30=monthly
+-- LOOKBACK_DAYS: How often to run (1=daily, 7=weekly, 30=monthly)
+-- MODEL_NAME:    Which LLM generates skills (claude-sonnet-4-5, llama3.1-70b, etc.)
+-- CRON:          Must match LOOKBACK_DAYS (see reference below)
 
 -- ============================================================
--- Task creation (CRON schedule matches LOOKBACK_DAYS above)
--- Change the CRON if you change LOOKBACK_DAYS:
---   1  day  → '0 2 * * * UTC'   (daily at 2 AM)
---   7  days → '0 2 * * 0 UTC'   (weekly Sunday 2 AM)
---   30 days → '0 2 1 * * UTC'   (monthly 1st at 2 AM)
+-- Task creation
 -- ============================================================
 CREATE OR REPLACE TASK <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_AGENT_TASK
     WAREHOUSE = 'COMPUTE_WH'
@@ -20,7 +18,8 @@ CREATE OR REPLACE TASK <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_AGENT_TASK
 AS
     CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
         '<YOUR_DB>.<YOUR_AGENT_SCHEMA>.YOUR_AGENT_NAME',
-        7  -- Must match the CRON schedule above
+        7,                    -- LOOKBACK_DAYS (must match CRON schedule)
+        'claude-sonnet-4-5'   -- MODEL_NAME for skill generation
     );
 
 -- Resume the task (created in suspended state by default)

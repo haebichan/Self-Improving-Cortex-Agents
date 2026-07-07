@@ -58,7 +58,8 @@ CREATE OR REPLACE TASK EVOLVE_MY_AGENT
 AS
     CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
         '<YOUR_DB>.<YOUR_SCHEMA>.YOUR_AGENT',
-        7  -- Looks back 7 days (same as the weekly schedule)
+        7,                    -- LOOKBACK_DAYS (same as weekly schedule)
+        'claude-sonnet-4-5'   -- MODEL_NAME for skill generation
     );
 ```
 
@@ -249,7 +250,7 @@ The CRON schedule and `LOOKBACK_DAYS` are set together in `setup/04_create_task.
 
 - **Cortex Agent** — versioning, aliases, skills
 - **Agent Observability** — `GET_AI_OBSERVABILITY_EVENTS` for trace analysis
-- **SNOWFLAKE.CORTEX.COMPLETE** — LLM-powered skill generation
+- **SNOWFLAKE.CORTEX.COMPLETE** — LLM-powered skill generation (model is configurable: `claude-sonnet-4-5`, `llama3.1-70b`, `mistral-large2`, etc.)
 - **Cortex Skills** — stage-backed `SKILL.md` files
 - **Semantic Views** — Cortex Analyst integration
 - **Internal Stages** — skill file storage + COPY INTO

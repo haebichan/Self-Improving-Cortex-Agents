@@ -2,16 +2,15 @@
 -- Deploy to: <YOUR_DB>.<YOUR_INFRA_SCHEMA>
 --
 -- Usage:
---   CALL EVOLVE_SKILLS('DB.SCHEMA.AGENT_NAME', 7);   -- look back 7 days (default)
---   CALL EVOLVE_SKILLS('DB.SCHEMA.AGENT_NAME', 1);   -- look back 1 day (for daily tasks)
+--   CALL EVOLVE_SKILLS('DB.SCHEMA.AGENT_NAME', 7, 'claude-sonnet-4-5');
+--   CALL EVOLVE_SKILLS('DB.SCHEMA.AGENT_NAME', 1, 'llama3.1-70b');
 --
--- The LOOKBACK_DAYS parameter controls how far back to scan for inefficient traces.
--- Set this to match your task schedule:
---   Daily task   → LOOKBACK_DAYS = 1
---   Weekly task  → LOOKBACK_DAYS = 7
---   Monthly task → LOOKBACK_DAYS = 30
+-- Parameters:
+--   AGENT_NAME    — Fully qualified agent name (DB.SCHEMA.NAME)
+--   LOOKBACK_DAYS — How far back to scan traces. Match to your task schedule.
+--   MODEL_NAME    — Which LLM to use for skill generation via CORTEX.COMPLETE
 
-CREATE OR REPLACE PROCEDURE EVOLVE_SKILLS(AGENT_NAME VARCHAR, LOOKBACK_DAYS NUMBER DEFAULT 7)
+CREATE OR REPLACE PROCEDURE EVOLVE_SKILLS(AGENT_NAME VARCHAR, LOOKBACK_DAYS NUMBER DEFAULT 7, MODEL_NAME VARCHAR DEFAULT 'claude-sonnet-4-5')
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -21,7 +20,7 @@ BEGIN
     LET validate_result VARCHAR;
     LET promote_result VARCHAR;
     
-    CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.CREATE_OR_REFINE_SKILLS(:AGENT_NAME, :LOOKBACK_DAYS) INTO :create_result;
+    CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.CREATE_OR_REFINE_SKILLS(:AGENT_NAME, :LOOKBACK_DAYS, :MODEL_NAME) INTO :create_result;
     CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.VALIDATE_SKILLS(:AGENT_NAME) INTO :validate_result;
     CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.PROMOTE_SKILLS(:AGENT_NAME) INTO :promote_result;
     

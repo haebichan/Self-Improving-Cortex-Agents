@@ -3,7 +3,7 @@ CREATE_OR_REFINE_SKILLS: Analyzes agent observability traces, detects inefficien
 orchestration patterns, and generates operational skills using LLMs.
 
 Deploy to: <YOUR_DB>.<YOUR_INFRA_SCHEMA>
-Signature: CREATE_OR_REFINE_SKILLS(AGENT_NAME VARCHAR, LOOKBACK_DAYS NUMBER DEFAULT 7) RETURNS VARCHAR
+Signature: CREATE_OR_REFINE_SKILLS(AGENT_NAME VARCHAR, LOOKBACK_DAYS NUMBER DEFAULT 7, MODEL_NAME VARCHAR DEFAULT 'claude-sonnet-4-5') RETURNS VARCHAR
 Language: Python 3.11
 Packages: snowflake-snowpark-python
 Handler: run
@@ -15,10 +15,10 @@ Key design decisions:
 - Dynamically resolves stage/registry/format paths from AGENT_NAME (DB.SCHEMA.NAME)
 - Detects traces with >3 tool calls as candidates for skill generation
 - Reads existing skills to support REFINEMENT (updating existing skills for new patterns)
-- Uses SNOWFLAKE.CORTEX.COMPLETE with model='auto' for skill generation
+- Uses SNOWFLAKE.CORTEX.COMPLETE with configurable model for skill generation
 """
 
-def run(session, agent_name, lookback_days=7):
+def run(session, agent_name, lookback_days=7, model_name='claude-sonnet-4-5'):
     import json
     import re
 
@@ -176,7 +176,7 @@ description: <trigger words from questions>
 
     safe_prompt = prompt.replace("'", "''")
     try:
-        result_row = session.sql(f"SELECT SNOWFLAKE.CORTEX.COMPLETE('auto', '{safe_prompt}') AS result").collect()
+        result_row = session.sql(f"SELECT SNOWFLAKE.CORTEX.COMPLETE('{model_name}', '{safe_prompt}') AS result").collect()
         skill_content = result_row[0]['RESULT'] if result_row else None
     except Exception as e:
         return json.dumps({"status": "error", "message": f"AI_COMPLETE failed: {str(e)[:100]}"})
