@@ -1,0 +1,43 @@
+-- Schedule the self-learning pipeline as a recurring task
+-- Run AFTER 02_deploy_procedures.sql
+--
+-- ============================================================
+-- CONFIGURE: Set your frequency here (one setting controls everything)
+-- ============================================================
+SET LOOKBACK_DAYS = 7;  -- How often to run: 1=daily, 7=weekly, 30=monthly
+
+-- ============================================================
+-- Task creation (CRON schedule matches LOOKBACK_DAYS above)
+-- Change the CRON if you change LOOKBACK_DAYS:
+--   1  day  → '0 2 * * * UTC'   (daily at 2 AM)
+--   7  days → '0 2 * * 0 UTC'   (weekly Sunday 2 AM)
+--   30 days → '0 2 1 * * UTC'   (monthly 1st at 2 AM)
+-- ============================================================
+CREATE OR REPLACE TASK <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_AGENT_TASK
+    WAREHOUSE = 'COMPUTE_WH'
+    SCHEDULE = 'USING CRON 0 2 * * 0 UTC'  -- Weekly (matches LOOKBACK_DAYS = 7)
+    COMMENT = 'Self-learning pipeline: analyzes traces, generates/validates/promotes skills'
+AS
+    CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
+        '<YOUR_DB>.<YOUR_AGENT_SCHEMA>.YOUR_AGENT_NAME',
+        7  -- Must match the CRON schedule above
+    );
+
+-- Resume the task (created in suspended state by default)
+ALTER TASK <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_AGENT_TASK RESUME;
+
+-- ============================================================
+-- Useful commands
+-- ============================================================
+-- Check task status:
+-- SHOW TASKS LIKE 'EVOLVE_AGENT_TASK' IN SCHEMA <YOUR_DB>.<YOUR_INFRA_SCHEMA>;
+
+-- Suspend:
+-- ALTER TASK <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_AGENT_TASK SUSPEND;
+
+-- Run manually (for testing):
+-- EXECUTE TASK <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_AGENT_TASK;
+
+-- View history:
+-- SELECT * FROM TABLE(INFORMATION_SCHEMA.TASK_HISTORY())
+-- WHERE NAME = 'EVOLVE_AGENT_TASK' ORDER BY SCHEDULED_TIME DESC LIMIT 10;

@@ -15,7 +15,7 @@ Key design decisions:
 - Dynamically resolves stage/registry/format paths from AGENT_NAME (DB.SCHEMA.NAME)
 - Detects traces with >3 tool calls as candidates for skill generation
 - Reads existing skills to support REFINEMENT (updating existing skills for new patterns)
-- Uses claude-sonnet-4-5 via SNOWFLAKE.CORTEX.COMPLETE for skill generation
+- Uses SNOWFLAKE.CORTEX.COMPLETE with model='auto' for skill generation
 """
 
 def run(session, agent_name, lookback_days=7):
@@ -176,7 +176,7 @@ description: <trigger words from questions>
 
     safe_prompt = prompt.replace("'", "''")
     try:
-        result_row = session.sql(f"SELECT SNOWFLAKE.CORTEX.COMPLETE('claude-sonnet-4-5', '{safe_prompt}') AS result").collect()
+        result_row = session.sql(f"SELECT SNOWFLAKE.CORTEX.COMPLETE('auto', '{safe_prompt}') AS result").collect()
         skill_content = result_row[0]['RESULT'] if result_row else None
     except Exception as e:
         return json.dumps({"status": "error", "message": f"AI_COMPLETE failed: {str(e)[:100]}"})

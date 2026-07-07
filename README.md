@@ -47,22 +47,27 @@ graph LR
 | 🚀 **Promote** | `PROMOTE_SKILLS` | Deploys validated skill to production via agent versioning |
 | 🔄 **Refine** | `CREATE_OR_REFINE_SKILLS` | Updates existing skills when new failure patterns emerge |
 
-### Single Command to Run on Your Agent:
+### Schedule It on Your Agent:
 
 ```sql
--- Point at ANY existing Cortex Agent — no changes to your agent needed
-CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
-    '<YOUR_DB>.<YOUR_SCHEMA>.YOUR_AGENT',
-    7  -- LOOKBACK_DAYS: how far back to scan traces (match to your task schedule)
-);
+-- One setting controls both the task schedule and trace lookback window
+-- Configure in: setup/04_create_task.sql
+CREATE OR REPLACE TASK EVOLVE_MY_AGENT
+    WAREHOUSE = 'COMPUTE_WH'
+    SCHEDULE = 'USING CRON 0 2 * * 0 UTC'  -- Weekly (Sunday 2 AM)
+AS
+    CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
+        '<YOUR_DB>.<YOUR_SCHEMA>.YOUR_AGENT',
+        7  -- Looks back 7 days (same as the weekly schedule)
+    );
 ```
 
 ## 🧩 Three Types of Agent Context
 
 | Context | Answers | Examples | Solved By |
 |---------|---------|----------|-----------|
-| **Semantic** (the *what*) | What does the data mean? | Revenue = SUM(amount) | Semantic Views |
-| **Business** (the *what*) | What does the enterprise know? | Account→Opportunity→Renewal | Cortex Sense / Ontology |
+| **Semantic** (the *what*) | What does the data mean? | Column definitions, table relationships, which view to query | Semantic Views |
+| **Business** (the *what*) | What does the enterprise know? | "Churn = no activity in 90 days", tier thresholds, SLA policies | Cortex Sense / Ontology |
 | **Operational** (the *how*) | How should the agent execute? | "Only pass completed orders to credit_check" | **This project** ✅ |
 
 ## 🚀 Quick Start
@@ -70,7 +75,6 @@ CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
 ### Prerequisites
 
 - Snowflake account with Cortex Agent access
-- `claude-sonnet-4-5` model available
 - ACCOUNTADMIN or equivalent privileges
 - Warehouse (X-Small sufficient)
 - **An existing Cortex Agent** with tools that you want to optimize
@@ -115,19 +119,11 @@ This creates the supporting objects in your infra schema:
 
 ### Step 4: Schedule the Pipeline
 
-Create a task that runs the pipeline on a schedule. The `LOOKBACK_DAYS` parameter should match your task frequency:
+Set your frequency once in `setup/04_create_task.sql` — the CRON schedule and the trace lookback window are configured together in one place:
 
 ```sql
-CREATE OR REPLACE TASK EVOLVE_MY_AGENT
-    WAREHOUSE = 'COMPUTE_WH'
-    SCHEDULE = 'USING CRON 0 2 * * 0 UTC'  -- Every Sunday at 2 AM
-AS
-    CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
-        '<YOUR_DB>.<YOUR_AGENT_SCHEMA>.YOUR_AGENT_NAME',
-        7  -- Look back 7 days (matches weekly schedule)
-    );
-
-ALTER TASK EVOLVE_MY_AGENT RESUME;
+-- Execute: setup/04_create_task.sql
+-- Edit the LOOKBACK_DAYS and CRON to your desired frequency (default: weekly)
 ```
 
 Or run it manually once to test:
@@ -158,12 +154,12 @@ The `example_agent/` folder contains a sample agent scenario you can deploy to s
 
 ### CREATE_OR_REFINE_SKILLS
 
-1. Queries `GET_AI_OBSERVABILITY_EVENTS()` for traces with >3 tool calls in the last 7 days
+1. Queries `GET_AI_OBSERVABILITY_EVENTS()` for traces with >3 tool calls within the `LOOKBACK_DAYS` window
 2. Extracts tool call details using trace attribute paths:
    - `snow.ai.observability.agent.tool.custom_tool.argument.value`
    - `snow.ai.observability.agent.tool.custom_tool.results`
 3. Loads any **existing active skills** (for refinement context)
-4. Sends trace context to `SNOWFLAKE.CORTEX.COMPLETE('claude-sonnet-4-5')` with structured prompt
+4. Sends trace context to `SNOWFLAKE.CORTEX.COMPLETE` with structured prompt
 5. Generates a `SKILL.md` file with frontmatter (name, description) + 5-8 line instructions
 6. Writes to `@AGENT_SKILLS/staging/{skill-name}/SKILL.md`
 7. Registers in SKILL_REGISTRY with status=`draft`
@@ -222,38 +218,23 @@ self_learning_agents/
 ├── setup/                             # 🏁 Deployment scripts (run in order)
 │   ├── 01_setup_infrastructure.sql   # Schemas, tables, stage, agent
 │   ├── 02_deploy_procedures.sql      # Pipeline stored procedures
-│   └── 03_run_demo.sql              # End-to-end demo walkthrough
+│   ├── 03_run_demo.sql              # End-to-end demo walkthrough
+│   └── 04_create_task.sql           # Schedule the pipeline as a recurring task
 └── docs/
     └── pipeline.gif                  # Architecture diagram
 ```
 
 > **Note:** The `infrastructure/` folder is the only thing you need to deploy. It works with **any** Cortex Agent — just point `EVOLVE_SKILLS` at your agent's fully-qualified name. The `example_agent/` folder is a sample agent with tables, procedures, and a semantic view that you can deploy to see the system in action end-to-end.
 
-## ⏰ Scheduling with Tasks
+## ⏰ Scheduling Reference
 
-The `LOOKBACK_DAYS` parameter controls how far back the pipeline scans for inefficient traces. **Set it to match your task schedule** — this way each run only looks at new traces since the last run:
+The CRON schedule and `LOOKBACK_DAYS` are set together in `setup/04_create_task.sql`. Reference:
 
-| Schedule | LOOKBACK_DAYS | CRON |
-|----------|---------------|------|
-| Daily | 1 | `USING CRON '0 2 * * * UTC'` |
-| Weekly | 7 | `USING CRON '0 2 * * 0 UTC'` |
-| Monthly | 30 | `USING CRON '0 2 1 * * UTC'` |
-
-```sql
--- Example: Weekly self-learning task
-CREATE OR REPLACE TASK EVOLVE_MY_AGENT
-    WAREHOUSE = 'COMPUTE_WH'
-    SCHEDULE = 'USING CRON 0 2 * * 0 UTC'  -- Every Sunday at 2 AM
-AS
-    CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
-        '<YOUR_DB>.<YOUR_AGENT_SCHEMA>.MY_AGENT',
-        7  -- Look back 7 days (matches weekly schedule)
-    );
-
-ALTER TASK EVOLVE_MY_AGENT RESUME;
-```
-
-One parameter controls everything — set the task frequency and `LOOKBACK_DAYS` to the same window.
+| Frequency | LOOKBACK_DAYS | CRON |
+|-----------|---------------|------|
+| Daily | 1 | `0 2 * * * UTC` |
+| Weekly | 7 | `0 2 * * 0 UTC` |
+| Monthly | 30 | `0 2 1 * * UTC` |
 
 ## ⚠️ Key Technical Notes
 
