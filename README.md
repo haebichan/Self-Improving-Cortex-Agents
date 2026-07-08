@@ -240,31 +240,26 @@ The CRON schedule and `LOOKBACK_DAYS` are set together in `setup/04_create_task.
 
 ## ⚙️ Tuning `TOOL_CALL_THRESHOLD`
 
-The `TOOL_CALL_THRESHOLD` parameter controls **how many tool calls a trace must have before the pipeline considers it inefficient** and generates a skill to fix it. Default is `3`.
+The `TOOL_CALL_THRESHOLD` parameter controls **how many tool calls a trace must have before the pipeline flags it as inefficient** and attempts to generate a skill. Default is `3`.
 
-### Why this matters
+### What it does
 
-Not every agent is the same. A trace with 5 tool calls could be totally normal for a complex agent, or a major red flag for a simple one:
+The pipeline scans your agent's observability traces and only processes ones where `tool_calls > TOOL_CALL_THRESHOLD`. Traces at or below the threshold are ignored — they're considered normal execution.
 
-| Agent Architecture | Expected Calls | Suggested Threshold |
-|--------------------|---------------|---------------------|
-| Simple (1 semantic view, 1-2 procedures) | 2-3 | `3` (default) |
-| Medium (2-3 semantic views, 3-5 procedures) | 3-5 | `5` |
-| Complex (multiple views, many tools, multi-step workflows) | 5-8 | `7-8` |
+### How to set it
 
-### How to determine your threshold
+1. **Observe your agent's baseline.** Run 5-10 representative questions and check the tool call counts (use the observability query in `03_run_demo.sql` Step 5). Note what a *successful* execution looks like for your agent.
+2. **Set threshold above your agent's normal range.** You want to catch retries and failures, not normal variance. LLMs have natural jitter — the same question might take 3 calls one run and 4 the next. A good starting point is **2× your expected call count** or **expected + 2-3**, whichever feels right after observing your baseline.
+3. **Iterate.** If the pipeline generates skills for traces that weren't actually failures, raise the threshold. If it's missing obvious retries, lower it.
 
-1. **Run your agent on 5-10 typical questions** and note the tool call counts
-2. **Your threshold = expected optimal calls + 1.** If your agent typically needs 4 calls for a good answer, set threshold to `5`
-3. **Too low** = pipeline generates skills for normal behavior (false positives)
-4. **Too high** = pipeline misses real inefficiencies (missed opportunities)
+### The tradeoffs
 
-### Example
-
-An agent with 3 semantic views might need: (1) query view A, (2) query view B, (3) call procedure — that's 3 calls on a good run. Set threshold to `4` so only retries/failures get flagged.
+- **Too low** → false positives. The pipeline generates skills for normal agent behavior, wasting LLM credits and potentially introducing unnecessary instructions.
+- **Too high** → missed opportunities. Real retries and failures slip through without being addressed.
 
 ```sql
-CALL EVOLVE_SKILLS('DB.SCHEMA.MY_AGENT', 7, 'claude-sonnet-4-5', 4);
+-- Example: agent normally takes 3-4 calls, set threshold to 6 to catch real retries
+CALL EVOLVE_SKILLS('DB.SCHEMA.MY_AGENT', 7, 'claude-sonnet-4-5', 6);
 ```
 
 ## ⚠️ Key Technical Notes
