@@ -41,7 +41,7 @@ graph LR
 
 | Step | Procedure | What It Does |
 |------|-----------|--------------|
-| 🔍 **Diagnose** | `CREATE_OR_REFINE_SKILLS` | Finds traces with >3 tool calls (retries/failures) |
+| 🔍 **Diagnose** | `CREATE_OR_REFINE_SKILLS` | Finds traces exceeding `TOOL_CALL_THRESHOLD` (default: 3) |
 | ⚡ **Generate** | `CREATE_OR_REFINE_SKILLS` | Uses LLM to distill failure patterns into a reusable skill |
 | ✅ **Validate** | `VALIDATE_SKILLS` | Replays original questions, measures improvement vs baseline |
 | 🚀 **Promote** | `PROMOTE_SKILLS` | Deploys validated skill to production via agent versioning |
@@ -59,7 +59,8 @@ AS
     CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
         '<YOUR_DB>.<YOUR_SCHEMA>.YOUR_AGENT',
         7,                    -- LOOKBACK_DAYS (same as weekly schedule)
-        'claude-sonnet-4-5'   -- MODEL_NAME for skill generation
+        'claude-sonnet-4-5',  -- MODEL_NAME for skill generation
+        3                     -- TOOL_CALL_THRESHOLD (tune per your agent)
     );
 ```
 
@@ -130,7 +131,7 @@ Set your frequency once in `setup/04_create_task.sql` — the CRON schedule and 
 Or run it manually once to test:
 
 ```sql
-CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS('<YOUR_DB>.<YOUR_AGENT_SCHEMA>.YOUR_AGENT_NAME', 7);
+CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS('<YOUR_DB>.<YOUR_AGENT_SCHEMA>.YOUR_AGENT_NAME', 7, 'claude-sonnet-4-5', 3);
 ```
 
 That's it. The pipeline will analyze your agent's traces, generate skills, validate them, and promote to production.
@@ -155,7 +156,7 @@ The `example_agent/` folder contains a sample agent scenario you can deploy to s
 
 ### CREATE_OR_REFINE_SKILLS
 
-1. Queries `GET_AI_OBSERVABILITY_EVENTS()` for traces with >3 tool calls within the `LOOKBACK_DAYS` window
+1. Queries `GET_AI_OBSERVABILITY_EVENTS()` for traces exceeding `TOOL_CALL_THRESHOLD` within the `LOOKBACK_DAYS` window
 2. Extracts tool call details using trace attribute paths:
    - `snow.ai.observability.agent.tool.custom_tool.argument.value`
    - `snow.ai.observability.agent.tool.custom_tool.results`
@@ -237,6 +238,35 @@ The CRON schedule and `LOOKBACK_DAYS` are set together in `setup/04_create_task.
 | Weekly | 7 | `0 2 * * 0 UTC` |
 | Monthly | 30 | `0 2 1 * * UTC` |
 
+## ⚙️ Tuning `TOOL_CALL_THRESHOLD`
+
+The `TOOL_CALL_THRESHOLD` parameter controls **how many tool calls a trace must have before the pipeline considers it inefficient** and generates a skill to fix it. Default is `3`.
+
+### Why this matters
+
+Not every agent is the same. A trace with 5 tool calls could be totally normal for a complex agent, or a major red flag for a simple one:
+
+| Agent Architecture | Expected Calls | Suggested Threshold |
+|--------------------|---------------|---------------------|
+| Simple (1 semantic view, 1-2 procedures) | 2-3 | `3` (default) |
+| Medium (2-3 semantic views, 3-5 procedures) | 3-5 | `5` |
+| Complex (multiple views, many tools, multi-step workflows) | 5-8 | `7-8` |
+
+### How to determine your threshold
+
+1. **Run your agent on 5-10 typical questions** and note the tool call counts
+2. **Your threshold = expected optimal calls + 1.** If your agent typically needs 4 calls for a good answer, set threshold to `5`
+3. **Too low** = pipeline generates skills for normal behavior (false positives)
+4. **Too high** = pipeline misses real inefficiencies (missed opportunities)
+
+### Example
+
+An agent with 3 semantic views might need: (1) query view A, (2) query view B, (3) call procedure — that's 3 calls on a good run. Set threshold to `4` so only retries/failures get flagged.
+
+```sql
+CALL EVOLVE_SKILLS('DB.SCHEMA.MY_AGENT', 7, 'claude-sonnet-4-5', 4);
+```
+
 ## ⚠️ Key Technical Notes
 
 | Issue | Detail |
@@ -259,7 +289,7 @@ The CRON schedule and `LOOKBACK_DAYS` are set together in `setup/04_create_task.
 
 | Problem | Solution |
 |---------|----------|
-| `no_retries_found` | Agent hasn't produced traces with >3 tool calls yet. Run a question that triggers a failure first. |
+| `no_retries_found` | Agent hasn't produced traces exceeding your `TOOL_CALL_THRESHOLD`. Run a question that triggers a retry/failure first. |
 | `all_traces_already_processed` | All recent inefficient traces already have skills. Try a new question pattern. |
 | Validation always fails | Check that PRODUCTION alias is correctly set. Verify observability events are appearing (60s delay). |
 | Skill not improving latency | Skill addresses tool calls, not LLM planning time. If deliberation is slow, that's business context (tier mapping, etc). |

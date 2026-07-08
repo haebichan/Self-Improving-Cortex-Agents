@@ -13,16 +13,16 @@ Key design decisions:
   - snow.ai.observability.agent.tool.custom_tool.argument.value (not ai.tool.input)
   - snow.ai.observability.agent.tool.custom_tool.results (not ai.tool.output)
 - Dynamically resolves stage/registry/format paths from AGENT_NAME (DB.SCHEMA.NAME)
-- Detects traces with >3 tool calls as candidates for skill generation
+- Detects traces exceeding TOOL_CALL_THRESHOLD as candidates for skill generation
 - Reads existing skills to support REFINEMENT (updating existing skills for new patterns)
 - Uses SNOWFLAKE.CORTEX.COMPLETE with configurable model for skill generation
 """
 
-def run(session, agent_name, lookback_days=7, model_name='claude-sonnet-4-5'):
+def run(session, agent_name, lookback_days=7, model_name='claude-sonnet-4-5', tool_call_threshold=3):
     import json
     import re
 
-    TOOL_CALL_THRESHOLD = 3
+    TOOL_CALL_THRESHOLD = int(tool_call_threshold)
     lookback_days = int(lookback_days)
 
     parts = agent_name.split('.')

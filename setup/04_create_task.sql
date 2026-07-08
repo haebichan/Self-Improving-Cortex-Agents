@@ -4,9 +4,10 @@
 -- ============================================================
 -- CONFIGURE: Set your parameters here
 -- ============================================================
--- LOOKBACK_DAYS: How often to run (1=daily, 7=weekly, 30=monthly)
--- MODEL_NAME:    Which LLM generates skills (claude-sonnet-4-5, llama3.1-70b, etc.)
--- CRON:          Must match LOOKBACK_DAYS (see reference below)
+-- LOOKBACK_DAYS:        How often to run (1=daily, 7=weekly, 30=monthly)
+-- MODEL_NAME:           Which LLM generates skills (claude-sonnet-4-5, llama3.1-70b, etc.)
+-- TOOL_CALL_THRESHOLD:  Min tool calls to flag a trace as inefficient (see README)
+-- CRON:                 Must match LOOKBACK_DAYS (see reference below)
 
 -- ============================================================
 -- Task creation
@@ -19,7 +20,8 @@ AS
     CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
         '<YOUR_DB>.<YOUR_AGENT_SCHEMA>.YOUR_AGENT_NAME',
         7,                    -- LOOKBACK_DAYS (must match CRON schedule)
-        'claude-sonnet-4-5'   -- MODEL_NAME for skill generation
+        'claude-sonnet-4-5',  -- MODEL_NAME for skill generation
+        3                     -- TOOL_CALL_THRESHOLD (see README for tuning guidance)
     );
 
 -- Resume the task (created in suspended state by default)

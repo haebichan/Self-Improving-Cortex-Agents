@@ -57,8 +57,9 @@ SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN(
 -- ============================================================
 CALL <YOUR_DB>.<YOUR_INFRA_SCHEMA>.EVOLVE_SKILLS(
     '<YOUR_DB>.<YOUR_AGENT_SCHEMA>.SELF_EVOLVING_AGENT',
-    7,
-    'claude-sonnet-4-5'
+    7,                    -- LOOKBACK_DAYS
+    'claude-sonnet-4-5',  -- MODEL_NAME
+    3                     -- TOOL_CALL_THRESHOLD
 );
 
 -- ============================================================
